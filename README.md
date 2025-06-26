@@ -1,2 +1,2 @@
-# FLAPPY_GA
-Genetic Algorithm implementation of the Flappy Bird game
+# CHROME_DINO_GA
+Genetic Algorithm implementation of the Google Chrome dinosaur game
