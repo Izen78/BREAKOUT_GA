@@ -1,2 +1,2 @@
-# CHROME_DINO_GA
-Genetic Algorithm implementation of the Google Chrome dinosaur game
+# BREAKOUT_GA
+NeuroEvolution of Augmenting Topologies (NEAT) implementation of the Atari Breakout Game. Using libraries pygame and pytorch.
