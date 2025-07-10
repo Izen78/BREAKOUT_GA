@@ -1,18 +1,27 @@
 # TODO:
 # Add in angle threshold
-# Fix for VEL=5, by making sure you take into account image_width and height
+# Fixed?: Fix for VEL=5, by making sure you take into account image_width and height
 # make ball directions into enum
+# fix ball angle with paddle
 
 import math
 import pygame
 import os
 from typing import TYPE_CHECKING,  Type
 import random
+from enum import Enum
 
 WINDOW_WIDTH = 640
 WINDOW_HEIGHT = 400
 TOPLEFT_CORNER = (33, 60)
 BRICK_TOPLEFT_CORNER= (0, -10)
+
+class Direc(Enum):
+    NULL = -1 
+    RIGHT = 0
+    UP = 1
+    LEFT = 2
+    DOWN = 3
 
 # Import Images
 i_bg = pygame.image.load("imgs/bg.png")
@@ -123,10 +132,11 @@ class Brick:
             # Either directly above or below brick
             if next_by <= self.y + self.img.get_height() and next_by >= self.y and ball.y_orientation == 1: # reflect from top
                 # BELOW
-                ball.y = self.y + self.img.get_height()
+                # ball.y = (self.y + self.img.get_height())*math.sin(ball.angle)
                 ball.reflect("up")
                 return True
-            elif next_by+ball.img.get_height() >= self.y and next_by <= self.y + self.img.get_height() and ball.y_orientation == -1:
+            elif next_by+ball.img.get_height() >= self.y and next_by+ball.img.get_height() <= self.y + self.img.get_height() and ball.y_orientation == -1:
+                # ABOVE
                 ball.reflect("down")
                 return True
         elif next_by >= self.y and next_by <= self.y + self.img.get_height():
@@ -139,7 +149,6 @@ class Brick:
                 # REFLECT FROM RIGHT
                 ball.reflect("right")
                 return True
-
         return False
 
 class Red_Brick(Brick):
@@ -190,14 +199,44 @@ class Paddle:
     img = i_paddle
     y = WINDOW_HEIGHT*0.75
     x = WINDOW_WIDTH/2
-    VEL = 2
+    VEL = 5
 
     def __init__(self) -> None:
         pass
 
     # must constrain between grey boxes
-    def move(self) -> None:
-        pass
+    def move(self, direc: Direc) -> None:
+        if direc == Direc.LEFT:
+            paddle.x = max(paddle.x - self.VEL, TOPLEFT_CORNER[0])
+        elif direc == Direc.RIGHT:
+            paddle.x = min(paddle.x + self.VEL, WINDOW_WIDTH - TOPLEFT_CORNER[0] - self.img.get_width() + 2)
+
+    def collision(self, ball: Type[Ball]) -> bool:
+        next_bx = int(ball.x) + ball.VEL*math.cos(ball.angle)
+        next_by = int(ball.y) + ball.VEL*math.sin(ball.angle)
+
+        if next_bx <= self.x + self.img.get_width() and next_bx >= self.x:
+            # Either directly above or below brick
+            if next_by <= self.y + self.img.get_height() and next_by >= self.y and ball.y_orientation == 1: # reflect from top
+                # BELOW
+                # ball.y = (self.y + self.img.get_height())*math.sin(ball.angle)
+                ball.reflect("up")
+                return True
+            elif next_by+ball.img.get_height() >= self.y and next_by+ball.img.get_height() <= self.y + self.img.get_height() and ball.y_orientation == -1:
+                # ABOVE
+                ball.reflect("down")
+                return True
+        elif next_by >= self.y and next_by <= self.y + self.img.get_height():
+            # Either directly left or right of brick
+            if next_bx <= self.x + self.img.get_width() and next_bx >= self.x:
+                # REFLECT FROM THE LEFT
+                ball.reflect("left")
+                return True
+            elif next_bx+ball.img.get_width() >= self.x and next_bx+ball.img.get_width() <= self.x + self.img.get_width():
+                # REFLECT FROM RIGHT
+                ball.reflect("right")
+                return True
+        return False
 
 
 pygame.init()
@@ -227,16 +266,35 @@ for i in range(18):
 
 bricks = [rbs, obs, br_bs, ybs, gbs, bbs]
 
-# ball = Ball(WINDOW_WIDTH/1.5, WINDOW_HEIGHT/1.5)
-ball = Ball(WINDOW_WIDTH/1.5, 70)
+ball = Ball(WINDOW_WIDTH/1.5, WINDOW_HEIGHT/1.5)
+# ball = Ball(WINDOW_WIDTH/1.5, 70)
+paddle = Paddle()
 
 delta_time = 0.1
+moving_right = False
+moving_left = False
+score = 0
+
+# MAIN LOOP
 while running:
 
     # poll for events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RIGHT:
+                # paddle.move(Direc.RIGHT)
+                moving_right = True
+            elif event.key == pygame.K_LEFT:
+                # paddle.move(Direc.LEFT)
+                moving_left = True
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_RIGHT:
+                moving_right = False
+            elif event.key == pygame.K_LEFT:
+                moving_left = False
+            
 
     # Render game here
     screen.fill((255, 255, 255))
@@ -251,13 +309,27 @@ while running:
                 screen.blit(b.img, (b.x, b.y))
     screen.blit(ball.img, (ball.x, ball.y))
 
-    # brick collision
+    if moving_right:
+        paddle.move(Direc.RIGHT)
+    elif moving_left:
+        paddle.move(Direc.LEFT)
 
+    screen.blit(paddle.img, (paddle.x, paddle.y))
+
+    # paddle collision
+    if paddle.collision(ball):
+        print("collided with ball")
+
+
+    # brick collision
     for i, brick in enumerate(bricks):
         for j, b in enumerate (brick):
             if b.alive and b.collision(ball):
                 b.alive = False
-                print("collided with brick on row: ", i, " column: ", j)
+                score += b.score_val
+                print("score: ", score)
+                screen.blit(ball.img, (ball.x, ball.y))
+                continue
 
     # boundary collision
     if int(ball.x)+ball.VEL*math.sin(ball.angle) <= TOPLEFT_CORNER[0]: # reflect from left
