@@ -42,6 +42,7 @@ class Ball:
     y_orientation = 1
     x_orientation = 0
     ANGLE_THRESHOLD = math.pi/8
+    alive = True
 
     def __init__(self, x, y) -> None:
         self.x = x
@@ -343,7 +344,8 @@ while running:
         ball.reflect("up")
     elif int(ball.y) >= WINDOW_HEIGHT:
         # death condition
-        pass
+        ball.alive = False
+
     ball.move()
 
     screen.blit(i_bg, (0, 0))
