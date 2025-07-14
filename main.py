@@ -279,6 +279,11 @@ score = 0
 # MAIN LOOP
 while running:
 
+    # Population -> 50 genomes
+    # Compute Fitness Fn.
+    # Winner
+    # Save Winner
+
     # poll for events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
