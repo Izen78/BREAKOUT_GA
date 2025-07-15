@@ -12,7 +12,7 @@ MUTATION_RATE = 0.01
 
 class NodeType(Enum):
     Sensor = 0
-    Hidden = 1
+    Hidden = 1 
     Output = 2
 
 class InnovationTracker:
@@ -47,7 +47,7 @@ class NodeGene:
         return NodeGene(self.node_type, self.node_id)
 
     def __str__(self) -> str:
-        return str(self.node_id)
+        return str(self.node_id) + ";" + str(self.node_type)
     
 class ConnectionGene:
 
@@ -74,7 +74,7 @@ class ConnectionGene:
         return self.innovation_number
 
     def __str__(self) -> str:
-        return "in: " + str(self.in_node) + ", out: " + str(self.out_node) + ", inn: " + str(self.innovation_number) + ", exp?: " + str(self.expressed)
+        return "in: " + str(self.in_node) + ", out: " + str(self.out_node) + ", weight: " + str(self.weight) + ", inn: " + str(self.innovation_number) + ", exp?: " + str(self.expressed)
 
 
 class Genome:
@@ -120,9 +120,9 @@ class Genome:
 
         if node1.get_type() == NodeType.Output and node2.get_type() == NodeType.Hidden:
             reversed = True
-        elif node1.get_type() == NodeType.Hidden and node2.get_type() == NodeType.Input:
+        elif node1.get_type() == NodeType.Hidden and node2.get_type() == NodeType.Sensor:
             reversed = True
-        elif node1.get_type() == NodeType.Output and node2.get_type() == NodeType.Input:
+        elif node1.get_type() == NodeType.Output and node2.get_type() == NodeType.Sensor:
             reversed = True
 
         # check for existing gene connections
@@ -153,8 +153,8 @@ class Genome:
             ids.append(node.get_id())
 
         middle_node = NodeGene(NodeType.Hidden, max(ids)+1)
-        connection1 = ConnectionGene(in_node.get_id(), middle_node.get_id(), 1.0, True, innovation_tracker.get_innovation())
-        connection2 = ConnectionGene(middle_node.get_id(), out_node.get_id(), connection.get_weight(), True, innovation_tracker.get_innovation())
+        connection1 = ConnectionGene(in_node, middle_node.get_id(), 1.0, True, innovation_tracker.get_innovation())
+        connection2 = ConnectionGene(middle_node.get_id(), out_node, connection.get_weight(), True, innovation_tracker.get_innovation())
 
         self.node_gene.append(middle_node)
         self.connection_gene.append(connection1)
@@ -185,14 +185,16 @@ class Genome:
                     if x >= 0.5:
                         child.add_connection_gene(conn2)
 
+
         # add the nodes needed if not already inside
+        existing_ids = {node.get_id(): node for node in parent1.get_node_genes() + parent2.get_node_genes()}
         for ch_conn in child.get_connection_genes():
-            conn_in = ch_conn.get_in_node()
-            conn_out = ch_conn.get_out_node()
-            if conn_in not in child.get_node_genes():
-                child.add_node_gene(conn_in)
-            elif conn_out not in child.get_node_genes():
-                child.add_node_gene(conn_out)
+            conn_in_id = ch_conn.get_in_node()
+            conn_out_id = ch_conn.get_out_node()
+            if conn_in_id not in [n.get_id() for n in child.get_node_genes()]:
+                child.add_node_gene(existing_ids[conn_in_id])
+            elif conn_out_id not in [n.get_id() for n in child.get_node_genes()]:
+                child.add_node_gene(existing_ids[conn_out_id])
 
         return child
 
@@ -219,12 +221,14 @@ class FeedForwardNeuralNetwork:
         self.inputs = []
         self.outputs = []
 
-    def phenotype_from(self, genome: Genome) -> None:
+    def phenotype_from(self, genome: Genome) -> FeedForwardNeuralNetwork:
         self.nodes = genome.get_node_genes()
+        activated = []
         # Get rid of disable connections
         for node in self.nodes:
             if node.get_type() == NodeType.Sensor:
                 self.inputs.append(node) 
+                activated.append(node)
             elif node.get_type() == NodeType.Output:
                 self.outputs.append(node)
 
@@ -233,29 +237,31 @@ class FeedForwardNeuralNetwork:
                 self.connections.append(connection)
 
         # Categorise nodes into layers
-        activated = []
         # Add all sensors as activated initially
-        for conn in self.connections:
-            if conn.get_in_node() == NodeType.Sensor:
-                activated.append(conn)
 
-        self.layers.append(activated)
-        while len(activated) != len(self.nodes):
+        self.layers.append(activated[:])
+        while len(activated) < len(self.nodes):
             temp = []
             for node in self.nodes:
                 if node not in activated:
-                    i = 0
-                    while i < len(self.connections):
-                        if node.get_id() == self.connections[i].get_out_node():
-                            if self.connections[i].get_in_node() not in activated:
+                    all_inputs_activated = True
+                    for conn in self.connections:
+                        if conn.get_out_node() == node.get_id():
+                            in_node_id = conn.get_in_node()
+                            in_node = next((n for n in self.nodes if n.get_id() == in_node_id), None)
+                            if in_node not in activated:
+                                all_inputs_activated = False
                                 break
-                        i += 1
-                    if i == len(self.connections):
+                    if all_inputs_activated:
                         temp.append(node)
-            if len(temp) > 0:
-                self.layers.append(temp)
-            for n in temp:
-                activated.append(n)
+
+            if not temp:
+                print("cannot activate any more nodes")
+                break
+            self.layers.append(temp)
+            activated.extend(temp)
+
+        return self
 
     # sets node output values after feed forward process 
     def activate(self, inputs: dict[GeneNode,float], activation_fn) -> dict[int, float]:
@@ -264,16 +270,15 @@ class FeedForwardNeuralNetwork:
         #     values[output_node] = 0.0
 
         # set up initial input values
-        for i in inputs:
-            values[i] = inputs[i]
+        for node,val in inputs.items():
+            values[node.get_id()] = val
 
         for layer in self.layers:
             for current_node in layer:
                 input_value = 0
                 for conn in self.connections:
                     if conn.get_out_node() == current_node.get_id():
-                        in_node = conn.get_in_node()
-                        input_value += in_node.get_weight() * values[in_node.get_id()]
+                        input_value += conn.get_weight() * values.get(conn.get_in_node(), 0.0)
                 values[current_node.get_id()] = activation_fn(input_value)
         return values
 
