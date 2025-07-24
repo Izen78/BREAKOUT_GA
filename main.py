@@ -838,7 +838,7 @@ if __name__ == "__main__":
         elites = sorted_population[:ELITE_N]
 
         print(f"Generation {gen} | Best fitness: {elites[0]["fitness"]:.2f}")
-        # elites[0]["genome"].print_genome()
+        elites[0]["genome"].print_genome()
 
         if elites[0]["fitness"] > FITNESS_SCORES_THRESHOLD:
             with open("best_genome.pkl","wb") as file:
